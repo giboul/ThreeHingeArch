@@ -1,6 +1,9 @@
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Callable
 from matplotlib import pyplot as plt
+
+
+numpy_array = np.ndarray
 
 colors = dict(
     arch='k',
@@ -12,11 +15,11 @@ alpha = 0.3
 
 
 def integrate(
-            x: np.ndarray,
-            y: np.ndarray,
-            c: float = 0,
-            expand: bool = True,
-            cumul: bool = True) -> np.ndarray:
+        x: numpy_array,
+        y: numpy_array,
+        c: float = 0,
+        expand: bool = True,
+        cumul: bool = True) -> numpy_array:
 
     arr = np.cumsum((x[1:]-x[:-1])*(y[1:]+y[:-1]))/2 + c
     if expand:
@@ -26,11 +29,13 @@ def integrate(
     return arr
 
 
-def arch_shape(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
-    return x*(k*L-x)*4/(L*(2*k*L-L))*H
+def arch_shape(x: numpy_array, L: float, H: float, k: float) -> numpy_array:
+    y = x*(k*L-x)*4/(L*(2*k*L-L))*H
+    yr = y[x <= L/2]
+    return np.concatenate((yr, yr[::-1]))
 
 
-def arch_deriv(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
+def arch_deriv(x: numpy_array, L: float, H: float, k: float) -> numpy_array:
     return (k*L-2*x)*4/(L*(2*k*L-L))*H
 
 
@@ -57,43 +62,29 @@ class ThreeHingedArch:
             L: float = 2,
             H: float = 1,
             k: float = 1,
-            num: int = None,
-            loads: tuple[np.ndarray] = None,
-            loads_scale=5,
-            moments_scale=20,
-            force_scale=20
-            ) -> None:
-
-        if num is None and loads is None:
-            num = 1000
-        elif num is None:
-            num = len(loads[0])
-        if loads is None:
-            loads = [
-                np.exp(np.linspace(0, 1, num)),
-                np.linspace(0, 1, num//2),
-                np.ones(num//2)
-            ]
+            num: int = 1000,
+            vertical_load: Callable = lambda x: np.exp(x),
+            right_load: Callable = lambda x: (x-x.min())/(x.max()-x.min()),
+            left_load: Callable = lambda x: np.ones_like(x),
+    ) -> None:
 
         self.L = L
         self.H = H
         self.k0 = k
 
-        self.moments_scale = moments_scale
-        self.force_scale = force_scale
-
         self.x = np.linspace(0, L, num=num)
         self.y = arch_shape(self.x, L, H, k)
         self.derivative = arch_deriv(self.x, L, H, k)
         self.nv = np.array(
-                        (-self.derivative, np.ones_like(self.derivative))
-                    )/np.sqrt(1+self.derivative**2)
+            (-self.derivative, np.ones_like(self.derivative))
+        )/np.sqrt(1+self.derivative**2)
         self.geometry = (self.x, self.y, self.L, self.H)
 
-        self.v, self.hl, self.hr = loads
+        self.v = vertical_load(self.x)
+        self.hl = left_load(self.y[self.x <= L/2])
+        self.hr = right_load(self.y[self.x > L/2])
         self.hr = self.hr[::-1]
         self.h = np.concatenate((self.hl, self.hr))
-        self.loads_scale = max(load.max() for load in loads)*loads_scale/L
 
         self.calc_constants()
         self.calc_reactions()
@@ -203,9 +194,6 @@ class ThreeHingedArch:
         )
 
         self.M = np.concatenate((Ml, Mr))
-        self.moments_scale = max(self.M)*self.moments_scale/self.L
-        if np.isclose(self.moments_scale, 0):
-            self.moments_scale = 1
 
         Nl = np.linalg.norm(np.array((
             Ax + Hls, Ay - Vls
@@ -214,16 +202,27 @@ class ThreeHingedArch:
             Bx - Hrs, By + Vrs
         )), axis=0)
         self.N = np.concatenate((Nl, Nr))
-        self.force_scale = max(self.N)*self.force_scale/self.L
 
-    def diagram(self):
+    def diagram(self,
+                loads_scale=1.5,
+                moments_scale=1.5,
+                force_scale=4):
+
+        loads_scale *= max(
+            np.abs(load).max() for load in (self.v, self.hr, self.hl)
+        )
+        moments_scale *= np.abs(self.M).max()
+        force_scale *= np.abs(self.N).max()
+
+        loads_scale = 1 if loads_scale == 0 else loads_scale
+        moments_scale = 1 if moments_scale == 0 else moments_scale
+        force_scale = 1 if force_scale == 0 else force_scale
 
         plt.plot(self.x, self.y, '-k', lw=3)
         plt.scatter((0, self.L/2, self.L), (0, self.H, 0), s=50,
                     facecolor='w', linewidths=2, edgecolors='k', zorder=3)
-        if self.moments_scale == 0:
-            self.moments_scale = 1
-        Mx, My = self.M*self.nv/self.moments_scale
+
+        Mx, My = self.M*self.nv/moments_scale
         moment, = plt.fill(
             np.concatenate((self.x+Mx, self.x[::-1])),
             np.concatenate((self.y+My, self.y[::-1])),
@@ -232,7 +231,8 @@ class ThreeHingedArch:
             label="Moment",
             alpha=alpha
         )
-        Nx, Ny = self.N*self.nv/self.force_scale
+
+        Nx, Ny = self.N*self.nv/force_scale
         normal, = plt.fill(
             np.concatenate((self.x+Nx, self.x[::-1])),
             np.concatenate((self.y+Ny, self.y[::-1])),
@@ -241,55 +241,56 @@ class ThreeHingedArch:
             label="Normal force",
             alpha=alpha
         )
+
         load = None
         if not (self.v == 0).all():
             load, = plt.fill(
                 np.concatenate((self.x, self.x[::-1])),
                 np.concatenate((
-                        1.2*self.H + self.v/self.loads_scale,
-                        1.2*self.H + np.zeros_like(self.v)
-                    )),
+                    1.2*self.H + self.v/loads_scale,
+                    1.2*self.H + np.zeros_like(self.v)
+                )),
                 edgecolor='none',
                 color=colors['load'],
                 label="Loads",
                 alpha=alpha
-                )
+            )
         if not (self.hl == 0).all():
             load, = plt.fill(
                 np.concatenate((
-                        -0.1*self.L - self.hl/self.loads_scale,
-                        -0.1*self.L + np.zeros_like(self.hl)
-                    )),
+                    -0.1*self.L - self.hl/loads_scale,
+                    -0.1*self.L + np.zeros_like(self.hl)
+                )),
                 np.concatenate((
-                        self.yl, self.yl[::-1]
-                    )),
+                    self.yl, self.yl[::-1]
+                )),
                 edgecolor='none',
                 color=colors['load'],
                 label="Loads",
                 alpha=alpha
-                )
+            )
         if not (self.hr == 0).all():
             load, = plt.fill(
                 np.concatenate((
-                        1.1*self.L + self.hr/self.loads_scale,
-                        1.1*self.L + np.zeros_like(self.hl)
-                    )),
+                    1.1*self.L + self.hr/loads_scale,
+                    1.1*self.L + np.zeros_like(self.hl)
+                )),
                 np.concatenate((
-                        self.yl, self.yl[::-1]
-                    )),
+                    self.yl, self.yl[::-1]
+                )),
                 edgecolor='none',
                 color=colors['load'],
                 label="Loads",
                 alpha=alpha
-                )
+            )
         lines = [moment, normal] + [load]
         labs = [line.get_label() for line in lines]
-        plt.legend(lines, labs)
+        plt.legend(lines, labs, loc='lower center')
         plt.show()
 
     def plot(self):
 
-        fig, ax1 = plt.subplots(1, sharex=True)
+        fig, ax1 = plt.subplots(1, sharex=True, figsize=(8, 6))
         ax2 = ax1.twinx()
         ax1.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
         ax2.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
@@ -304,7 +305,7 @@ class ThreeHingedArch:
 
         lns = (lns1, lns2, lns3, lns4)
         labs = [ln.get_label() for ln in lns]
-        ax2.legend(lns, labs, loc='center left')
+        ax2.legend(lns, labs, loc=(0.01, 1.0), ncols=4)
         ax1.set_xlabel("Position [m]")
         ax1.set_ylabel("Moment [N$\\cdot$m]", color=colors["moment"])
         ax2.set_ylabel("Force [N]", color=colors["force"])
@@ -317,7 +318,22 @@ class ThreeHingedArch:
 
 if __name__ == "__main__":
 
-    arch = ThreeHingedArch()
+    def horizontal_load_right(x: numpy_array):
+        return np.zeros_like(x)
+
+    def horizontal_load_left(x: numpy_array):
+        return (x-x.min())/(x.max()-x.min())
+
+    def vertical_load(x: numpy_array):
+        return np.exp(horizontal_load_left(x))
+
+    arch = ThreeHingedArch(
+        L=4,  # length
+        H=3,  # height
+        vertical_load=vertical_load,
+        right_load=horizontal_load_right,
+        left_load=horizontal_load_left
+    )
     arch.diagram()
     plt.style.use('bmh')
     arch.plot()
