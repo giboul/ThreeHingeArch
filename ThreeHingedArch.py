@@ -71,7 +71,7 @@ class ThreeHingedArch:
             left_load: Callable = lambda y: np.zeros_like(y),
             surface_load: Callable = lambda x: np.zeros_like(x),
             density: float = 0,  # N/m
-            colors: dict[str: str] = colors,
+            colors: Dict[str: str] = colors,
             alpha: float = alpha
     ) -> None:
 
