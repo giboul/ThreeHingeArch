@@ -3,15 +3,12 @@ from typing import Dict, List, Callable
 from matplotlib import pyplot as plt
 
 
-numpy_array = np.ndarray
-
-
 def integrate(
-        x: numpy_array,
-        y: numpy_array,
+        x: np.ndarray,
+        y: np.ndarray,
         c: float = 0,
         expand: bool = True,
-        cumul: bool = True) -> numpy_array:
+        cumul: bool = True) -> np.ndarray:
 
     arr = np.cumsum((x[1:]-x[:-1])*(y[1:]+y[:-1]))/2 + c
     if expand:
@@ -21,13 +18,13 @@ def integrate(
     return arr
 
 
-def arch_shape(x: numpy_array, L: float, H: float, k: float) -> numpy_array:
+def arch_shape(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
     y = x*(k*L-x)*4/(L*(2*k*L-L))*H
     yl = y[x <= L/2]
     return np.concatenate((yl, yl[::-1]))
 
 
-def arch_deriv(x: numpy_array, L: float, H: float, k: float) -> numpy_array:
+def arch_deriv(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
     d = (k*L-2*x)*4/(L*(2*k*L-L))*H
     dl = d[x <= L/2]
     return np.concatenate((dl, -dl[::-1]))
@@ -360,16 +357,16 @@ class ThreeHingedArch:
 
 if __name__ == "__main__":
 
-    def horizontal_load_right(x: numpy_array):
+    def horizontal_load_right(x: np.ndarray):
         return np.zeros_like(x)
 
-    def vertical_load(x: numpy_array):
+    def vertical_load(x: np.ndarray):
         return (x-x.min())/(x.max()-x.min())
 
-    def horizontal_load_left(x: numpy_array):
+    def horizontal_load_left(x: np.ndarray):
         return np.exp(vertical_load(x))*0
 
-    def surface_load(x: numpy_array):
+    def surface_load(x: np.ndarray):
         return np.ones_like(x)
 
     arch = ThreeHingedArch(
