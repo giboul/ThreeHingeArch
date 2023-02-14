@@ -5,15 +5,6 @@ from matplotlib import pyplot as plt
 
 numpy_array = np.ndarray
 
-colors = dict(
-    arch='k',
-    load='r',
-    force='g',
-    shear='m',
-    moment='b'
-)
-alpha = 0.3
-
 
 def integrate(
         x: numpy_array,
@@ -71,8 +62,13 @@ class ThreeHingedArch:
             left_load: Callable = lambda y: np.zeros_like(y),
             surface_load: Callable = lambda x: np.zeros_like(x),
             density: float = 0,  # N/m
-            colors: Dict[str: str] = colors,
-            alpha: float = alpha
+            colors: Dict = dict(
+                arch='k',
+                load='r',
+                force='g',
+                shear='m',
+                moment='b'),
+            alpha: float = 0.3
     ) -> None:
 
         # Geometry is entirely defined from these 3 parameters
@@ -245,9 +241,9 @@ class ThreeHingedArch:
             np.concatenate((self.x+Mx, self.x[::-1])),
             np.concatenate((self.y+My, self.y[::-1])),
             edgecolor='none',
-            color=colors['moment'],
+            color=self.colors['moment'],
             label="Moment",
-            alpha=alpha
+            alpha=self.alpha
         )
 
         Nx, Ny = self.N*self.nv/force_scale
@@ -256,17 +252,17 @@ class ThreeHingedArch:
             np.concatenate((self.x+Nx, self.x[::-1])),
             np.concatenate((self.y+Ny, self.y[::-1])),
             edgecolor='none',
-            color=colors['force'],
+            color=self.colors['force'],
             label="Normal force",
-            alpha=alpha
+            alpha=self.alpha
         )
         shear, = plt.fill(
             np.concatenate((self.x+Vx, self.x[::-1])),
             np.concatenate((self.y+Vy, self.y[::-1])),
             edgecolor='none',
-            color=colors['shear'],
+            color=self.colors['shear'],
             label="Shear force",
-            alpha=alpha
+            alpha=self.alpha
         )
 
         load = None
@@ -278,9 +274,9 @@ class ThreeHingedArch:
                     1.2*self.H + np.zeros_like(self.v)
                 )),
                 edgecolor='none',
-                color=colors['load'],
+                color=self.colors['load'],
                 label="Loads",
-                alpha=alpha
+                alpha=self.alpha
             )
         if not (self.hl == 0).all():
             load, = plt.fill(
@@ -292,9 +288,9 @@ class ThreeHingedArch:
                     self.yl, self.yl[::-1]
                 )),
                 edgecolor='none',
-                color=colors['load'],
+                color=self.colors['load'],
                 label="Loads",
-                alpha=alpha
+                alpha=self.alpha
             )
         if not (self.hr == 0).all():
             load, = plt.fill(
@@ -306,9 +302,9 @@ class ThreeHingedArch:
                     self.yl, self.yl[::-1]
                 )),
                 edgecolor='none',
-                color=colors['load'],
+                color=self.colors['load'],
                 label="Loads",
-                alpha=alpha
+                alpha=self.alpha
             )
 
         # Grouping labels into the axis' legend
@@ -323,25 +319,26 @@ class ThreeHingedArch:
         if show:
             plt.show()
 
-    def plot(self, show_loads=True, show=True):
+    def plot(self, show_loads=False, show=True):
 
         fig, ax1 = plt.subplots(1, sharex=True, figsize=(8, 6))
         ax2 = ax1.twinx()
-        ax1.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
-        ax2.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
+        if hasattr(ax1, "axline"):
+            ax1.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
+            ax2.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
         moment, = ax1.plot(self.x, self.M, '--', label="Moments",
-                           color=colors['moment'], lw=2)
+                           color=self.colors['moment'], lw=2)
         normal, = ax2.plot(self.x, self.N, '-.', label="Normal force",
-                           color=colors['force'], lw=1.5)
+                           color=self.colors['force'], lw=1.5)
         shear, = ax2.plot(self.x, self.V, '-.', label="Shear force",
-                          color=colors['shear'], lw=1.5)
+                          color=self.colors['shear'], lw=1.5)
 
         if show_loads:
             lns3, = ax2.plot(self.x, self.v, '-.',
-                             color=colors['load'],
+                             color=self.colors['load'],
                              label='Vertical load', lw=1)
             lns4, = ax2.plot(self.x, np.concatenate((self.hl, self.hr)), ':',
-                             color=colors['load'],
+                             color=self.colors['load'],
                              label='Horizontal load', lw=1)
             lns = (moment, normal, shear, lns3, lns4)
         else:
@@ -349,13 +346,13 @@ class ThreeHingedArch:
 
         # Merging labels into one legend
         labs = [ln.get_label() for ln in lns]
-        ax2.legend(lns, labs, loc=(0.01, 1.0), ncols=4)
+        ax2.legend(lns, labs)
         ax1.set_xlabel("Position [m]")
-        ax1.set_ylabel("Moment [N$\\cdot$m]", color=colors["moment"])
+        ax1.set_ylabel("Moment [N$\\cdot$m]", color=self.colors["moment"])
         ax2.set_ylabel("Force [N]")
 
         # Detail colors
-        ax1.tick_params(colors=colors["moment"], axis="y")
+        ax1.tick_params(colors=self.colors["moment"], axis="y")
 
         if show:
             plt.show()
@@ -386,4 +383,4 @@ if __name__ == "__main__":
     )
     arch.diagram()
     plt.style.use('bmh')
-    arch.plot(show_loads=False)
+    arch.plot()
