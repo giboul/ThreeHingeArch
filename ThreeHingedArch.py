@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict, List, Callable
 from matplotlib import pyplot as plt
+from matplotlib.pyplot import Line2D
 
 
 def integrate(
@@ -24,7 +25,7 @@ def arch_shape(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
     return np.concatenate((yl, yl[::-1]))
 
 
-def arch_deriv(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
+def arch_derivative(x: np.ndarray, L: float, H: float, k: float) -> np.ndarray:
     d = (k*L-2*x)*4/(L*(2*k*L-L))*H
     dl = d[x <= L/2]
     return np.concatenate((dl, -dl[::-1]))
@@ -48,11 +49,21 @@ class ThreeHingedArch:
     #             |                       |
     #             Ay                      Cy
 
+    # Effort sign convention
+    #      <-
+    #    +-------+
+    # <- |       | ->
+    #    +-------+
+    #       ->
+    # Positive moment: top is compressed, bottom is in traction
+
     def __init__(
             self,
             L: float = 2,
             H: float = 1,
             k: float = 1,
+            arch_shape_func: Callable = arch_shape,
+            arch_deriv_func: Callable = arch_derivative,
             num: int = 1000,
             vertical_load: Callable = lambda x: np.zeros_like(x),
             right_load: Callable = lambda y: np.zeros_like(y),
@@ -78,8 +89,8 @@ class ThreeHingedArch:
 
         # numerical shape
         self.x = np.linspace(0, L, num=num)
-        self.y = arch_shape(self.x, L, H, k)
-        self.derivative = arch_deriv(self.x, L, H, k)
+        self.y = arch_shape_func(self.x, L, H, k)
+        self.derivative = arch_deriv_func(self.x, L, H, k)
 
         # Left side
         left = self.x <= self.L/2
@@ -101,11 +112,13 @@ class ThreeHingedArch:
         # Attaching the essentials to the object
         self.geometry = (self.x, self.y, self.L, self.H)
 
-        dead_weight = self.dl*density
-        sf = self.dl*surface_load(self.x)
+        self.dead_load = self.dl*density
+
+        self.surface_load = surface_load(self.x)
+        sf = self.dl*self.surface_load
         sfx, sfy = sf*np.abs(self.nv) * self.dl
 
-        self.v = vertical_load(self.x) + dead_weight + sfy
+        self.v = vertical_load(self.x) + self.dead_load + sfy
         self.vl = self.v[left]
         self.vr = self.v[right]
         self.hl = left_load(self.yl) + sfx[left]
@@ -159,28 +172,38 @@ class ThreeHingedArch:
 
     def calc_reactions(self, load_values):
 
-        (Vr, Mvr, Vl, Mvl,
-         Hr, Mhr, Hl, Mhl) = load_values
+        if hasattr(self, "invA"):
+            # In a future version, a tkinter interface will be set up
+            # This function will be called repeateadly
+            # Computing an inverse matrix one for all
+            return self.invA@b
+        else:
+            (Vr, Mvr, Vl, Mvl,
+             Hr, Mhr, Hl, Mhl) = load_values
 
-        A = np.array([
-            # Ax  Ay       Bx         By         Cx         Cy
-            [1,    0,      -1,         0,        0,         0],
-            [0,    0,       1,         0,       -1,         0],
-            [0,    1,       0,         1,        0,         0],
-            [0,    0,       0,        -1,        0,         1],
-            [0,    0,  self.H,  self.L/2,        0,         0],
-            [0,    0,       0,         0,  -self.H,  self.L/2],
-        ])
-        b = np.array([
-            -Hl,  # Ax - Bx =-Hl
-            +Hr,  # Bx - Cx = Hr
-            Vl,  # Ay + By = Vl
-            Vr,  # -By + Cy = Vr
-            Mvl+Mhl,  # Bx*H + By*L/2 = Mvl + Mhl
-            Mvr+Mhr  # -Cx*H + Cy*L/2 = Mvr + Mhr
-        ])
+            A = np.array([
+                # Ax  Ay       Bx         By         Cx         Cy
+                [1,    0,      -1,         0,        0,         0],
+                [0,    0,       1,         0,       -1,         0],
+                [0,    1,       0,         1,        0,         0],
+                [0,    0,       0,        -1,        0,         1],
+                [0,    0,  self.H,  self.L/2,        0,         0],
+                [0,    0,       0,         0,  -self.H,  self.L/2],
+            ])
+            b = np.array([
+                -Hl,  # Ax - Bx =-Hl
+                +Hr,  # Bx - Cx = Hr
+                Vl,  # Ay + By = Vl
+                Vr,  # -By + Cy = Vr
+                Mvl+Mhl,  # Bx*H + By*L/2 = Mvl + Mhl
+                Mvr+Mhr  # -Cx*H + Cy*L/2 = Mvr + Mhr
+            ])
 
-        return np.linalg.solve(A, b)
+            if np.linalg.det(A) != 0:
+                self.invA = np.linalg.inv(A)
+                return self.invA@b
+            else:
+                return np.linalg.solve(A, b)
 
     def calc_stresses(self, load_arrays, reactions):
 
@@ -190,12 +213,12 @@ class ThreeHingedArch:
         Ax, Ay, Bx, By, Cx, Cy = reactions
 
         Ml = (
-            (Ax+Hls)*self.yl - (Ay-Vls)*self.xl
-            - Mhls - Mvls
+            - (Ax+Hls)*self.yl + (Ay-Vls)*self.xl
+            + Mhls + Mvls
         )
         Mr = (
-            - Mvrs - Mhrs
-            - (Bx-Hrs)*(self.H-self.yr) + (By+Vrs)*(self.xr-self.L/2)
+            + Mvrs + Mhrs
+            + (Bx-Hrs)*(self.H-self.yr) - (By+Vrs)*(self.xr-self.L/2)
         )
 
         self.M = np.concatenate((Ml, Mr))
@@ -235,9 +258,9 @@ class ThreeHingedArch:
 
         Mx, My = self.M*self.nv/moments_scale
         moment, = plt.fill(
-            np.concatenate((self.x+Mx, self.x[::-1])),
-            np.concatenate((self.y+My, self.y[::-1])),
-            edgecolor='none',
+            np.concatenate((self.x-Mx, self.x[::-1])),  # diagram on the
+            np.concatenate((self.y-My, self.y[::-1])),  # tension side
+            linewidth=0.0,
             color=self.colors['moment'],
             label="Moment",
             alpha=self.alpha
@@ -245,18 +268,20 @@ class ThreeHingedArch:
 
         Nx, Ny = self.N*self.nv/force_scale
         Vx, Vy = self.V*self.nv/force_scale
+
         normal, = plt.fill(
             np.concatenate((self.x+Nx, self.x[::-1])),
             np.concatenate((self.y+Ny, self.y[::-1])),
-            edgecolor='none',
+            linewidth=0.0,
             color=self.colors['force'],
             label="Normal force",
             alpha=self.alpha
         )
+
         shear, = plt.fill(
             np.concatenate((self.x+Vx, self.x[::-1])),
             np.concatenate((self.y+Vy, self.y[::-1])),
-            edgecolor='none',
+            linewidth=0.0,
             color=self.colors['shear'],
             label="Shear force",
             alpha=self.alpha
@@ -270,8 +295,9 @@ class ThreeHingedArch:
                     1.2*self.H + self.v/loads_scale,
                     1.2*self.H + np.zeros_like(self.v)
                 )),
-                edgecolor='none',
+                # linewidth=0.0,
                 color=self.colors['load'],
+                hatch='|',
                 label="Loads",
                 alpha=self.alpha
             )
@@ -284,8 +310,9 @@ class ThreeHingedArch:
                 np.concatenate((
                     self.yl, self.yl[::-1]
                 )),
-                edgecolor='none',
+                # linewidth=0.0,
                 color=self.colors['load'],
+                hatch='-',
                 label="Loads",
                 alpha=self.alpha
             )
@@ -298,8 +325,9 @@ class ThreeHingedArch:
                 np.concatenate((
                     self.yl, self.yl[::-1]
                 )),
-                edgecolor='none',
+                # linewidth=0.0,
                 color=self.colors['load'],
+                hatch='-',
                 label="Loads",
                 alpha=self.alpha
             )
@@ -316,14 +344,31 @@ class ThreeHingedArch:
         if show:
             plt.show()
 
-    def plot(self, show_loads=False, show=True):
+    def plot_loads(self, show=True):
+
+        plt.plot(self.x, self.v, label='Vertical loads')
+        plt.plot(self.x, np.concatenate((self.hl, self.hr)),
+                 label='Horizontal loads')
+        plt.plot(self.x, self.surface_load, label='Surface loads')
+        plt.plot(self.x, self.dead_load, label='Dead load')
+
+        plt.title('Applied loads')
+        plt.xlabel('x position')
+        plt.ylabel('Load')
+        plt.legend()
+        plt.show()
+
+    def plot_stresses(self, show_loads=False, show=True):
 
         fig, ax1 = plt.subplots(1, sharex=True, figsize=(8, 6))
         ax2 = ax1.twinx()
         if hasattr(ax1, "axline"):
-            ax1.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
-            ax2.axline((0, 0), slope=0, color='k', linestyle='--', lw=1)
-        moment, = ax1.plot(self.x, self.M, '--', label="Moments",
+            ax1.axline((0, 0), slope=0, color=self.colors['moment'],
+                       linestyle='--', lw=1.5, alpha=0.5)
+            ax2.axline((0, 0), slope=0, color='k',
+                       linestyle='--', lw=1, alpha=0.5)
+
+        moment, = ax1.plot(self.x, self.M, '-', label="Moment",
                            color=self.colors['moment'], lw=2)
         normal, = ax2.plot(self.x, self.N, '-.', label="Normal force",
                            color=self.colors['force'], lw=1.5)
@@ -344,9 +389,10 @@ class ThreeHingedArch:
         # Merging labels into one legend
         labs = [ln.get_label() for ln in lns]
         ax2.legend(lns, labs)
-        ax1.set_xlabel("Position [m]")
-        ax1.set_ylabel("Moment [N$\\cdot$m]", color=self.colors["moment"])
-        ax2.set_ylabel("Force [N]")
+        plt.title('Internal stresses')
+        ax1.set_xlabel("x position")
+        ax1.set_ylabel("Moment", color=self.colors["moment"])
+        ax2.set_ylabel("Forces")
 
         # Detail colors
         ax1.tick_params(colors=self.colors["moment"], axis="y")
@@ -357,14 +403,14 @@ class ThreeHingedArch:
 
 if __name__ == "__main__":
 
-    def horizontal_load_right(x: np.ndarray):
-        return np.zeros_like(x)
+    def horizontal_load_right(y: np.ndarray):
+        return np.zeros_like(y)
 
     def vertical_load(x: np.ndarray):
         return (x-x.min())/(x.max()-x.min())
 
-    def horizontal_load_left(x: np.ndarray):
-        return np.exp(vertical_load(x))*0
+    def horizontal_load_left(y: np.ndarray):
+        return np.exp(vertical_load(y))*0
 
     def surface_load(x: np.ndarray):
         return np.ones_like(x)
@@ -378,6 +424,9 @@ if __name__ == "__main__":
         # right_load=horizontal_load_right,
         # left_load=horizontal_load_left
     )
+    plt.style.use('bmh')
+    arch.plot_loads()
+    plt.style.use('default')
     arch.diagram()
     plt.style.use('bmh')
-    arch.plot()
+    arch.plot_stresses()
