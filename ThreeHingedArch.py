@@ -50,11 +50,11 @@ class ThreeHingedArch:
     #             Ay                      Cy
 
     # Effort sign convention
-    #      <-
+    #       <-
     #    +-------+
     # <- |       | ->
     #    +-------+
-    #       ->
+    #        ->
     # Positive moment: top is compressed, bottom is in traction
 
     def __init__(
@@ -83,14 +83,29 @@ class ThreeHingedArch:
         self.L = L  # Lenght
         self.H = H  # Height
         self.k0 = k  # top angle coeficient
+        self.num = num
 
         self.colors = colors  # Diagram & plot colors
         self.alpha = alpha  # Diagram fills transparency
+        self.arch_shape_func = arch_shape_func
+        self.arch_deriv_func = arch_deriv_func
 
+        self.vertical_load = vertical_load
+        self.right_load = right_load
+        self.left_load = left_load
+        self.surface_load = surface_load
+        self.surface_load = surface_load
+        self.density = density
+
+        self.set_shape()
+        self.set_load()
+        self.calculate()
+
+    def set_shape(self):
         # numerical shape
-        self.x = np.linspace(0, L, num=num)
-        self.y = arch_shape_func(self.x, L, H, k)
-        self.derivative = arch_deriv_func(self.x, L, H, k)
+        self.x = np.linspace(0, self.L, num=self.num)
+        self.y = self.arch_shape_func(self.x, self.L, self.H, self.k0)
+        self.derivative = self.arch_deriv_func(self.x, self.L, self.H, self.k0)
 
         # Left side
         left = self.x <= self.L/2
@@ -102,29 +117,31 @@ class ThreeHingedArch:
         self.xr = self.x[right]
         self.yr = self.y[right]
 
+        self.left, self.right = left, right
+
         # direction vector
         self.dv = np.array(
             (np.ones_like(self.derivative), self.derivative)
         )/np.sqrt(1+self.derivative**2)
-        self.dl = np.linalg.norm((np.ones(num), self.derivative), axis=0)
+        self.dl = np.linalg.norm((np.ones(self.num), self.derivative), axis=0)
         # normal vector
         self.nv = np.array((-self.dv[1, :], self.dv[0, :]))
         # Attaching the essentials to the object
         self.geometry = (self.x, self.y, self.L, self.H)
 
-        self.dead_load = self.dl*density
+    def set_load(self):
+
+        self.dead_load = self.dl*self.density
 
         self.surface_load = surface_load(self.x)
         sf = self.dl*self.surface_load
         sfx, sfy = sf*np.abs(self.nv) * self.dl
 
         self.v = vertical_load(self.x) + self.dead_load + sfy
-        self.vl = self.v[left]
-        self.vr = self.v[right]
-        self.hl = left_load(self.yl) + sfx[left]
-        self.hr = right_load(self.yr)[::-1] + sfx[right]
-
-        self.calculate()
+        self.vl = self.v[self.left]
+        self.vr = self.v[self.right]
+        self.hl = self.left_load(self.yl) + sfx[self.left]
+        self.hr = self.right_load(self.yr)[::-1] + sfx[self.right]
 
     def calculate(self):
         values, arrays = self.calc_loads()
