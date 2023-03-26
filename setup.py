@@ -4,11 +4,11 @@ with open("README.md", "r") as fh:
     description = fh.read()
 
 setuptools.setup(
-    name="ThreeHingeArch",
+    name="ThreeHingedArch",
     version="0.0.2",
     author="giboul",
     author_email="axel.giboulot@epfl.ch",
-    packages=["ThreeHingeArch"],
+    packages=["ThreeHingedArch"],
     description="Static analysis of three heinged arches",
     long_description=description,
     long_description_content_type="text/markdown",
