@@ -136,7 +136,7 @@ class ThreeHingedArch:
         sf = self.dl*self.sfl
         sfx, sfy = sf*np.abs(self.nv) * self.dl
 
-        self.v = vertical_load(self.x) + self.dead_load + sfy
+        self.v = self.vertical_load(self.x) + self.dead_load + sfy
         self.vl = self.v[self.left]
         self.vr = self.v[self.right]
         self.hl = self.left_load(self.yl) + sfx[self.left]
@@ -419,23 +419,23 @@ class ThreeHingedArch:
 
 if __name__ == "__main__":
 
-    def horizontal_load_right(y: np.ndarray):
+    def _horizontal_load_right(y: np.ndarray):
         return np.zeros_like(y)
 
-    def vertical_load(x: np.ndarray):
+    def _vertical_load(x: np.ndarray):
         return (x-x.min())/(x.max()-x.min())
 
-    def horizontal_load_left(y: np.ndarray):
+    def _horizontal_load_left(y: np.ndarray):
         return np.exp(vertical_load(y))
 
-    def surface_load(x: np.ndarray):
+    def _surface_load(x: np.ndarray):
         return np.ones_like(x)
 
     arch = ThreeHingedArch(
         L=4,  # length
         H=3,  # height
         k=1.0,
-        surface_load=surface_load,
+        surface_load=_surface_load,
         # vertical_load=vertical_load,
         # right_load=horizontal_load_right,
         # left_load=horizontal_load_left
