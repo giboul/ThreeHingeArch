@@ -426,7 +426,7 @@ if __name__ == "__main__":
         return (x-x.min())/(x.max()-x.min())
 
     def _horizontal_load_left(y: np.ndarray):
-        return np.exp(vertical_load(y))
+        return np.exp(_vertical_load(y))
 
     def _surface_load(x: np.ndarray):
         return np.ones_like(x)
