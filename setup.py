@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ThreeHingedArch",
-    version="0.0.2",
+    version="0.0.3",
     author="giboul",
     author_email="axel.giboulot@epfl.ch",
     packages=["ThreeHingedArch"],
