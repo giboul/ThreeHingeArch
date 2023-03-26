@@ -247,7 +247,7 @@ class ThreeHingedArch:
         self.N = (F*self.dv).sum(axis=0)
         self.V = (F*self.nv).sum(axis=0)
 
-        return self.M, self.N, self.V
+        return self.N, self.V, self.M
 
     def diagram(self,
                 loads_scale=1.5,
