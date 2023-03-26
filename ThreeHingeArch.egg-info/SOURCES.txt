@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+ThreeHingeArch/__init__.py
+ThreeHingeArch.egg-info/PKG-INFO
+ThreeHingeArch.egg-info/SOURCES.txt
+ThreeHingeArch.egg-info/dependency_links.txt
+ThreeHingeArch.egg-info/top_level.txt

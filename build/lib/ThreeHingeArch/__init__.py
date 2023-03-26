@@ -94,6 +94,7 @@ class ThreeHingedArch:
         self.right_load = right_load
         self.left_load = left_load
         self.surface_load = surface_load
+        self.surface_load = surface_load
         self.density = density
 
         self.set_shape()
@@ -132,8 +133,8 @@ class ThreeHingedArch:
 
         self.dead_load = self.dl*self.density
 
-        self.sfl = self.surface_load(self.x)
-        sf = self.dl*self.sfl
+        self.surface_load = surface_load(self.x)
+        sf = self.dl*self.surface_load
         sfx, sfy = sf*np.abs(self.nv) * self.dl
 
         self.v = vertical_load(self.x) + self.dead_load + sfy
@@ -365,7 +366,7 @@ class ThreeHingedArch:
         plt.plot(self.x, self.v, label='Vertical loads')
         plt.plot(self.x, np.concatenate((self.hl, self.hr)),
                  label='Horizontal loads')
-        plt.plot(self.x, self.sfl, label='Surface loads')
+        plt.plot(self.x, self.surface_load, label='Surface loads')
         plt.plot(self.x, self.dead_load, label='Dead load')
 
         plt.title('Applied loads')
