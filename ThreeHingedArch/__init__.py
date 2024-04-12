@@ -269,9 +269,9 @@ class ThreeHingedArch:
 
         plt.axis('off')
         # Arch
-        plt.plot(self.x, self.y, '-k', lw=3)
+        la, = plt.plot(self.x, self.y, '-k', lw=3)
         # Hinges
-        plt.scatter((0, self.L/2, self.L), (0, self.H, 0), s=50,
+        sh = plt.scatter((0, self.L/2, self.L), (0, self.H, 0), s=50,
                     facecolor='w', linewidths=2, edgecolors='k', zorder=3)
 
         Mx, My = self.M*self.nv/moments_scale
@@ -361,20 +361,23 @@ class ThreeHingedArch:
 
         if show:
             plt.show()
+        
+        return lines, la, sh
 
     def plot_loads(self, show=True):
 
-        plt.plot(self.x, self.v, label='Vertical loads')
-        plt.plot(self.x, np.concatenate((self.hl, self.hr)),
+        lv, = plt.plot(self.x, self.v, label='Vertical loads')
+        lh, = plt.plot(self.x, np.concatenate((self.hl, self.hr)),
                  label='Horizontal loads')
-        plt.plot(self.x, self.sfl, label='Surface loads')
-        plt.plot(self.x, self.dead_load, label='Dead load')
+        ls, = plt.plot(self.x, self.sfl, label='Surface loads')
+        ld, = plt.plot(self.x, self.dead_load, label='Dead load')
 
         plt.title('Applied loads')
         plt.xlabel('x position')
         plt.ylabel('Load')
         plt.legend()
         plt.show()
+        return lv, lh, ls, ld
 
     def plot_stresses(self, show_loads=False, show=True):
 
