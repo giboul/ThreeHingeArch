@@ -3,7 +3,7 @@ Describing the first order reaction of a three-hinged arch to a load
 
 By first defining loads to apply along the archs
 
-<img src="pics/loads">
+<img src="pics/loads.png">
 
 This package allows to compute the NVM diagram
 
